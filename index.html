@@ -19,7 +19,7 @@
     .hand { display: flex; justify-content: center; height: 160px; gap: -30px; padding: 10px; min-height: 160px; }
     #center-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 50px; }
     
-    /* Card Base */
+    /* Card Appearance */
     .card { 
         width: var(--card-w); height: var(--card-h); border-radius: 10px; 
         border: 3px solid white; position: relative; cursor: pointer; 
@@ -33,7 +33,7 @@
     .card:hover { transform: translateY(-20px); z-index: 50; }
     .card-back { background: #333; color: transparent; border-color: #555; cursor: default; }
 
-    /* Colors */
+    /* Card Color Classes */
     .red { background-color: var(--red); } 
     .blue { background-color: var(--blue); }
     .yellow { background-color: var(--yellow); color: black; } 
@@ -71,6 +71,42 @@
     #color-picker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: 1fr 1fr; gap: 15px; z-index: 200; }
     #color-picker button { width: 70px; height: 70px; border-radius: 50%; border: 3px solid white; }
     .hidden { display: none !important; visibility: hidden; pointer-events: none; }
+
+    /* Unplayable Card Effects */
+.card.unplayable {
+    filter: grayscale(0.8) brightness(0.4);
+    cursor: not-allowed;
+    transform: scale(0.9);
+    opacity: 0.6;
+}
+
+@keyframes draw-pulse {
+    0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.7); }
+    70% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
+    100% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0); }
+}
+.pulse-draw { animation: draw-pulse 2s infinite; border-color: #fff !important; }
+
+    /* Turn-Based Background Effects */
+.my-turn-active { background: radial-gradient(circle at center, #1a2b1a 0%, #121212 100%) !important; }
+.opp-turn-active { background: radial-gradient(circle at center, #2b1a1a 0%, #121212 100%) !important; }
+
+    /* Action Overlay Animation */
+#action-overlay {
+    position: fixed; 
+    top: 80%; /* Changed from 40% to 80% to move it down */
+    width: 100%; 
+    text-align: center; 
+    font-size: 5rem; 
+    font-weight: 900; 
+    pointer-events: none; 
+    z-index: 1000;
+    transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    opacity: 0; 
+    transform: scale(0.5); 
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(0,0,0,0.8); /* Added shadow for better legibility */
+}
 </style>
 </head>
 <body>
@@ -93,13 +129,15 @@
                 <option value="until">Draw Until Playable</option>
             </select>
             <label>0s & 7s Rules:</label>
-            <input type="checkbox" id="set-07" checked>
+            <input type="checkbox" id="set-07">
             <label>Draw even if playable:</label>
             <input type="checkbox" id="set-always-draw">
         </div>
         <button onclick="startMode('ai')">Singleplayer (vs AI)</button>
         <button onclick="startMode('multi')">Multiplayer</button>
     </div>
+
+    <div id="action-overlay"></div>
 
     <div id="lobby" class="overlay hidden">
         <h2>Multiplayer Lobby</h2>
@@ -118,6 +156,7 @@
         <button onclick="location.reload()">Main Menu</button>
     </div>
 
+<!-- Game Board -->
 <div id="board" class="hidden">
     <div id="hud">
         <div id="turn-txt">Turn: -</div>
@@ -151,10 +190,13 @@
     </div>
 </div>
 
+<!-- JavaScript Code -->
 <script>
+// Game Constants
 const COLORS = ['red', 'blue', 'yellow', 'green'];
 const VALUES = ['0','1','2','3','4','5','6','7','8','9','Skip','Reverse','+2'];
 
+// Game State
 let state = {
     deck: [], discard: [], 
     players: [
@@ -168,7 +210,10 @@ let state = {
 };
 
 let peer, conn;
+const gameContainer = document.getElementById('game-container');
+const actionOverlay = document.getElementById('action-overlay');
 
+// Array Shuffling Utility
 function shuffle(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -177,6 +222,7 @@ function shuffle(array) {
     return array;
 }
 
+// Game Initialization
 function initGame() {
     state.deck = [];
     COLORS.forEach(c => VALUES.forEach(v => { state.deck.push({c, v}); if(v!=='0') state.deck.push({c,v}); }));
@@ -204,6 +250,7 @@ function initGame() {
     }
 }
 
+// Move Validation
 function validateMove(card, top) {
     if(state.stack > 0) {
         if(state.settings.stackMode === 'OFF') return false;
@@ -217,6 +264,7 @@ function validateMove(card, top) {
     return (card.c === 'wild' || card.c === state.color || card.v === top.v);
 }
 
+// Play Processing
 function processPlay(pIdx, cIdx) {
     if(state.actionLock || state.turn !== pIdx || !state.active) return;
     const player = state.players[pIdx];
@@ -231,68 +279,81 @@ function processPlay(pIdx, cIdx) {
 
     state.actionLock = true;
     hideTooltip();
+    let flashText = null;
 
-const willHaveOneCard = player.hand.length === 2;
+    const willHaveOneCard = player.hand.length === 2;
     const unoAlreadyCalled = player.uno;
 
     state.discard.push(player.hand.splice(cIdx, 1)[0]);
     
-    // If they have 1 card left and DID NOT press the button yet, they are vulnerable
     if (willHaveOneCard && !unoAlreadyCalled) {
         player.unoPending = true;
     } else if (!willHaveOneCard) {
-        // Reset if they have more than 1 card
         player.uno = false;
         player.unoPending = false;
     }
 
     if(state.settings.rules07) {
         if(card.v === '0') {
+            flashText = "ROTATING!";
             let h0 = state.players[0].hand;
             state.players[0].hand = state.players[1].hand;
             state.players[1].hand = h0;
             state.players.forEach(p => {p.uno = false; p.unoPending = false;});
-            showStatus("Hands Rotated!");
         } else if (card.v === '7') {
+            flashText = "SWAPPING!";
             let h0 = state.players[0].hand;
             state.players[0].hand = state.players[1].hand;
             state.players[1].hand = h0;
             state.players.forEach(p => {p.uno = false; p.unoPending = false;});
-            showStatus("Hands Swapped!");
         }
     }
 
-    if(card.v === '+2') state.stack += 2;
-    if(card.v === '+4') state.stack += 4;
-
-    if(card.c === 'wild') {
+    if(card.v === 'Skip' || card.v === 'Reverse') {
+        flashText = card.v.toUpperCase() + "!";
+        flashAction(flashText);
+        sync(flashText);
+        finishTurn(pIdx);
+    } else if (card.v === '+2') {
+        flashText = "+2";
+        state.stack += 2;
+        flashAction(flashText);
+        sync(flashText);
+        finishTurn(pIdx === 0 ? 1 : 0);
+    } else if (card.v === '+4') {
+        flashText = "+4";
+        state.stack += 4;
         state.color = 'wild'; 
-        if(state.isAI && pIdx === 1) {
-            aiPickColor();
-        } else {
-            render();
-            if(state.isMulti) sync();
-        }
+        flashAction(flashText);
+        sync(flashText);
+        if(state.isAI && pIdx === 1) aiPickColor();
+        else render();
+    } else if (card.c === 'wild') {
+        state.color = 'wild'; 
+        flashAction("WILD!");
+        sync("WILD!");
+        if(state.isAI && pIdx === 1) aiPickColor();
+        else render();
     } else {
         state.color = card.c;
-        if(card.v === 'Skip' || card.v === 'Reverse') {
-            finishTurn(pIdx);
+        if(flashText) {
+            flashAction(flashText);
+            sync(flashText);
         } else {
-            finishTurn(pIdx === 0 ? 1 : 0);
+            sync();
         }
+        finishTurn(pIdx === 0 ? 1 : 0);
     }
 }
 
+// Turn Management
 function finishTurn(nextPlayer) { 
-    // Clear "new" status for the player who just finished their action
     state.players[state.turn].hand.forEach(c => delete c.isNew); 
     
     state.turn = nextPlayer;
     state.hasDrawn = false; 
     state.actionLock = false; 
     
-    // Sync BEFORE the next player has a chance to play 
-    // so they see their "NEW" cards immediately.
     if(state.isMulti && state.amIHost) {
         sync(); 
     }
@@ -301,24 +362,24 @@ function finishTurn(nextPlayer) {
     if(state.active && state.turn === 1 && state.isAI) setTimeout(runAI, 800); 
 }
 
+// Draw Processing
 function processDraw(pIdx) {
     if(state.actionLock || state.turn !== pIdx || !state.active) return;
     
     const top = state.discard[state.discard.length - 1];
     const canPlay = state.players[pIdx].hand.some(c => validateMove(c, top));
 
+    // Prevent drawing if they have a move (unless settings allow it)
     if(!state.settings.drawAnytime && canPlay && state.stack === 0) {
         if(pIdx === 0) showStatus("You have playable cards!");
-        else if (state.isMulti && state.amIHost) {
-            conn.send({type: 'STATUS', msg: "You have playable cards!"});
-        }
         return;
     }
 
     state.actionLock = true;
     
     if(state.stack > 0) {
-        // Draw the full stack
+        flashAction(`+${state.stack}`);
+        
         for(let i = 0; i < state.stack; i++) {
             drawCardToPlayer(pIdx);
         }
@@ -326,20 +387,14 @@ function processDraw(pIdx) {
         state.players[pIdx].uno = false;
         state.players[pIdx].unoPending = false;
 
-        // --- FIX STARTS HERE ---
-        // We must render/sync before finishTurn clears the "isNew" flags
         render(); 
         if(state.isMulti && state.amIHost) sync();
         
-        // Short delay so the player can actually see the badges 
-        // before the turn officially passes (optional but helpful)
         setTimeout(() => {
             finishTurn(pIdx === 0 ? 1 : 0);
         }, 500); 
-        // --- FIX ENDS HERE ---
 
     } else {
-        // Normal single draw logic
         drawCardToPlayer(pIdx);
         state.players[pIdx].uno = false;
         state.players[pIdx].unoPending = false;
@@ -363,6 +418,7 @@ function processDraw(pIdx) {
     }
 }
 
+// Card Drawing
 function drawCardToPlayer(pIdx) { 
     if(state.deck.length === 0) { 
         if(state.discard.length <= 1) return false; 
@@ -372,7 +428,6 @@ function drawCardToPlayer(pIdx) {
     } 
     if(state.deck.length > 0) { 
         let c = state.deck.pop(); 
-        // Mark it as new for whoever is receiving it
         c.isNew = true; 
         state.players[pIdx].hand.push(c); 
         return true; 
@@ -380,6 +435,7 @@ function drawCardToPlayer(pIdx) {
     return false; 
 }
 
+// User Input Handlers
 function handleDrawRequest() {
     if(state.isMulti && !state.amIHost) conn.send({type: 'DRAW'});
     else processDraw(0);
@@ -425,6 +481,7 @@ function handleChallengeRequest() {
     }
 }
 
+// Wild Card Selection
 function selectWildColor(c) {
     if(state.isMulti && !state.amIHost) {
         conn.send({type: 'COLOR', color: c});
@@ -436,20 +493,32 @@ function selectWildColor(c) {
     }
 }
 
+// UI Rendering
 function render() {
     if(!state.active) return;
+    
+    gameContainer.className = state.turn === 0 ? 'my-turn-active' : 'opp-turn-active';
+
     const pHand = document.getElementById('player-hand');
+    const top = state.discard[state.discard.length-1];
     pHand.innerHTML = '';
     
     state.players[0].hand.forEach((c, i) => {
         const div = document.createElement('div');
-        div.className = `card ${c.c}`;
+        
+        const isPlayable = validateMove(c, top) && state.turn === 0;
+        div.className = `card ${c.c} ${(!isPlayable && state.turn === 0) ? 'unplayable' : ''}`;
+        
         let fontSize = c.v.length > 2 ? "1.1rem" : (c.v.includes('+') ? "2rem" : "2.5rem");
         div.innerHTML = `${c.isNew ? '<div class="new-badge">NEW</div>' : ''}<span style="font-size: ${fontSize}; font-weight: 900;">${c.v}</span>`;
         div.ondblclick = () => handlePlayRequest(i);
         div.onclick = () => updateCardInfo(c);
         pHand.appendChild(div);
     });
+
+    const hasMove = state.players[0].hand.some(c => validateMove(c, top));
+    const drawBtn = document.getElementById('draw-pile');
+    drawBtn.classList.toggle('pulse-draw', !hasMove && state.turn === 0);
 
     const oHand = document.getElementById('opponent-hand');
     oHand.innerHTML = '';
@@ -460,7 +529,6 @@ function render() {
     });
 
     const disc = document.getElementById('discard-pile');
-    const top = state.discard[state.discard.length-1];
     let discFS = (top.v.length > 2) ? "1.1rem" : (top.v.includes('+') ? "2rem" : "2.5rem");
     disc.innerHTML = `<div class="card ${state.color}"><span style="font-size: ${discFS}; font-weight: 900;">${top.v}</span></div>`;
 
@@ -475,48 +543,47 @@ function render() {
         document.getElementById('color-picker').classList.add('hidden');
     }
 
-    // --- BUTTON LOGIC FIXES ---
-    
-    // 1. Skip Button: Visible if it's your turn, you've drawn, and the drawn card isn't playable 
-    // or you're in 'once' mode.
     const lastDrawn = state.players[0].hand[state.players[0].hand.length-1];
     const drawnIsPlayable = lastDrawn ? validateMove(lastDrawn, top) : false;
     const canSkip = state.turn === 0 && state.hasDrawn && (state.settings.drawMode === 'once' || !drawnIsPlayable);
     document.getElementById('skip-turn-btn').classList.toggle('hidden', !canSkip);
 
-    // 2. UNO Button: Show if you have 1 or 2 cards and haven't called it yet.
     const showUno = state.turn === 0 && state.players[0].hand.length <= 2 && !state.players[0].uno;
     document.getElementById('uno-btn').classList.toggle('hidden', !showUno);
 
-    // 3. Challenge Button: Show if the opponent has a pending penalty.
     const showChallenge = state.turn === 0 && state.players[1].unoPending;
     document.getElementById('challenge-btn').classList.toggle('hidden', !showChallenge);
 
     checkWinCondition();
 }
 
+// Card Information Display
 function updateCardInfo(c) {
     document.getElementById('card-info').innerText = `Card: ${c.c} ${c.v}`;
 }
 
+// Status Messages
 function showStatus(m) {
     const s = document.getElementById('status-msg');
     s.innerText = m;
     setTimeout(() => { if(s.innerText === m) s.innerText = ""; }, 2500);
 }
 
+// Win Condition Check
 function checkWinCondition() {
     if(state.stack > 0) return;
     if(state.players[0].hand.length === 0) endGame("You Win!");
     else if(state.players[1].hand.length === 0) endGame("Opponent Wins!");
 }
 
+// Game End
 function endGame(txt) {
     state.active = false;
     document.getElementById('win-screen').classList.remove('hidden');
     document.getElementById('win-txt').innerText = txt;
 }
 
+// Rematch Handling
 function requestRematch() {
     if(state.isMulti) {
         state.players[0].ready = true;
@@ -526,6 +593,7 @@ function requestRematch() {
     } else initGame();
 }
 
+// AI Logic
 function runAI() {
     if(!state.active || state.turn !== 1) return;
     if(state.players[0].unoPending) {
@@ -544,6 +612,7 @@ function runAI() {
     } else processDraw(1);
 }
 
+// AI Color Selection
 function aiPickColor() {
     const counts = {};
     state.players[1].hand.forEach(c => { if(c.c !== 'wild') counts[c.c] = (counts[c.c] || 0) + 1; });
@@ -554,6 +623,7 @@ function aiPickColor() {
     finishTurn(0);
 }
 
+// Game Mode Selection
 function startMode(m) {
     state.settings.stackMode = document.getElementById('set-stack').value;
     state.settings.drawMode = document.getElementById('set-draw').value;
@@ -582,6 +652,7 @@ function startMode(m) {
     }
 }
 
+// Multiplayer Connection
 function connectToPeer() {
     const target = document.getElementById('join-id').value;
     if(!target) return;
@@ -590,6 +661,18 @@ function connectToPeer() {
     setupConn();
 }
 
+// Action Animation
+function flashAction(text) {
+    actionOverlay.innerText = text;
+    actionOverlay.style.opacity = "1";
+    actionOverlay.style.transform = "scale(1.2)";
+    setTimeout(() => {
+        actionOverlay.style.opacity = "0";
+        actionOverlay.style.transform = "scale(0.5)";
+    }, 1200);
+}
+
+// Connection Setup
 function setupConn() {
     conn.on('open', () => { 
         document.getElementById('lobby').classList.add('hidden'); 
@@ -607,7 +690,7 @@ function setupConn() {
                 state.players[1].uno = true; 
                 state.players[1].unoPending = false;
                 showStatus("PLAYER 2: UNO!");
-                sync(); 
+                sync("UNO!"); // Sync the Uno shout
                 render();
             }
             if(data.type === 'CHALLENGE') { 
@@ -616,7 +699,7 @@ function setupConn() {
                     state.players[0].unoPending = false; 
                     state.players[0].uno = true; 
                     showStatus("CAUGHT! +2 Cards");
-                    sync(); 
+                    sync("CAUGHT!"); 
                     render();
                 } 
             }
@@ -634,17 +717,20 @@ function setupConn() {
                 state.active = receivedState.active;
                 state.settings = receivedState.settings;
                 
-                // Remap hands
                 state.players[0] = receivedState.players[1]; 
                 state.players[1] = receivedState.players[0];
                 state.turn = (receivedState.turn === 1) ? 0 : 1;
                 state.hasDrawn = (state.turn === 0) ? receivedState.hasDrawn : false;
 
-                // FIX: Hide the win screen and show the board if the game becomes active
                 if(state.active) {
                     document.getElementById('win-screen').classList.add('hidden');
                     document.getElementById('board').classList.remove('hidden');
-                    document.getElementById('rematch-status').innerText = ""; // Clear waiting text
+                    document.getElementById('rematch-status').innerText = "";
+                }
+
+                // TRIGGER THE FLASH ON GUEST SCREEN
+                if(data.action) {
+                    flashAction(data.action);
                 }
                 
                 render();
@@ -660,11 +746,14 @@ function copyId() {
     showStatus("ID Copied to Clipboard!");
 }
 
-function sync() { 
+// State Synchronization
+function sync(actionText = null) { 
     if(conn && state.amIHost) {
-        conn.send({type: 'STATE', state}); 
+        conn.send({type: 'STATE', state, action: actionText}); 
     }
 }
+
+// Tooltip Hiding
 function hideTooltip() { document.getElementById('first-turn-help').style.display = 'none'; }
 </script>
 </body>
