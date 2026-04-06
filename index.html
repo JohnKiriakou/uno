@@ -18,6 +18,7 @@
     button:hover:not(:disabled) { background: #666; transform: scale(1.05); }
     .hand { display: flex; justify-content: center; height: 160px; gap: -30px; padding: 10px; min-height: 160px; }
     #center-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 50px; }
+    #card-info {margin-top: 10px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 0.9rem; line-height: 1.2; }
     
     /* Card Appearance */
     .card { 
@@ -195,6 +196,15 @@
 // Game Constants
 const COLORS = ['red', 'blue', 'yellow', 'green'];
 const VALUES = ['0','1','2','3','4','5','6','7','8','9','Skip','Reverse','+2'];
+const CARD_DESCRIPTIONS = {
+    'Skip': 'Skips the next player\'s turn entirely.',
+    'Reverse': 'Reverses the direction of play, functionally a skip in 2 player.',
+    '+2': 'The next player must draw 2 cards and skip their turn.',
+    '+4': 'Choose a color. The next player draws 4 cards and skips their turn.',
+    'Wild': 'Allows you to change the current active color.',
+    '0': '7s & 0s Rule: All players rotate hands in the direction of play. Otherwise just a regular card.',
+    '7': '7s & 0s Rule: Choose any player to swap your entire hand with. Otherwise just a regular card.'
+};
 
 // Game State
 let state = {
@@ -566,7 +576,18 @@ function render() {
 
 // Card Information Display
 function updateCardInfo(c) {
-    document.getElementById('card-info').innerText = `Card: ${c.c} ${c.v}`;
+    const infoBox = document.getElementById('card-info');
+    
+    // Determine the description based on the card value
+    const description = CARD_DESCRIPTIONS[c.v] || `A standard ${c.c} ${c.v} card.`;
+    
+    // Update the HUD text
+    infoBox.innerHTML = `
+        <strong style="color: var(--${c.c === 'wild' ? 'white' : c.c})">
+            ${c.c.toUpperCase()} ${c.v}
+        </strong><br>
+        <span style="font-size: 0.85rem; opacity: 0.9;">${description}</span>
+    `;
 }
 
 // Status Messages
