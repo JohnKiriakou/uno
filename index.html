@@ -231,8 +231,15 @@ function initGame() {
 
     state.players.forEach(p => { p.hand = state.deck.splice(0, 7); p.uno = false; p.unoPending = false; p.ready = false; });
     
-    let startIdx = state.deck.findIndex(c => !isNaN(c.v) && c.c !== 'wild');
-    if(startIdx === -1) startIdx = 0; 
+    const isValidStartCard = card => {
+        if(card.c === 'wild') return false;
+        if(['+2', '+4'].includes(card.v)) return false;
+        if(state.settings.rules07 && (card.v === '0' || card.v === '7')) return false;
+        return !isNaN(card.v);
+    };
+    let startIdx = state.deck.findIndex(isValidStartCard);
+    if(startIdx === -1) startIdx = state.deck.findIndex(c => c.c !== 'wild');
+    if(startIdx === -1) startIdx = 0;
     
     state.discard = [state.deck.splice(startIdx, 1)[0]];
     state.color = state.discard[0].c;
@@ -609,7 +616,20 @@ function runAI() {
     if(valid.length > 0) {
         if(hand.length === 2) { state.players[1].uno = true; showStatus("AI: UNO!"); }
         processPlay(1, valid[0]);
-    } else processDraw(1);
+    } else {
+        processDraw(1);
+        if(state.active && state.turn === 1 && !state.actionLock) {
+            const newTop = state.discard[state.discard.length-1];
+            const newHand = state.players[1].hand;
+            const newValid = newHand.map((c, i) => validateMove(c, newTop) ? i : -1).filter(i => i !== -1);
+            if(newValid.length > 0) {
+                if(newHand.length === 2) { state.players[1].uno = true; showStatus("AI: UNO!"); }
+                processPlay(1, newValid[0]);
+            } else {
+                finishTurn(0);
+            }
+        }
+    }
 }
 
 // AI Color Selection
