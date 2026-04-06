@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+    :root {
+        --red: #ff5555; --blue: #5555ff; --yellow: #ffaa00; --green: #55aa55;
+        --wild: #222; --bg: #121212; --card-w: 90px; --card-h: 130px;
+    }
+    body { margin: 0; font-family: sans-serif; background: var(--bg); color: white; overflow: hidden; }
+    #game-container { position: relative; width: 100vw; height: 100vh; }
+    .overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; text-align: center; }
+    .hidden { display: none !important; }
+    button { padding: 0 20px; height: 40px; line-height: 40px; font-size: 1rem; border: none; border-radius: 5px; cursor: pointer; background: #444; color: white; transition: 0.2s; margin: 5px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; }
+    button:hover:not(:disabled) { background: #666; transform: scale(1.05); }
+    .hand { display: flex; justify-content: center; height: 160px; gap: -30px; padding: 10px; min-height: 160px; }
+    #center-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 50px; }
+    
+    /* Card Base */
+    .card { 
+        width: var(--card-w); height: var(--card-h); border-radius: 10px; 
+        border: 3px solid white; position: relative; cursor: pointer; 
+        display: flex; align-items: center; justify-content: center; 
+        transition: transform 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
+        user-select: none; overflow: visible; /* Crucial for the badge */
+        overflow: visible !important;
+    }
+    .card:hover { transform: translateY(-20px); z-index: 50; }
+    .card-back { background: #333; color: transparent; border-color: #555; cursor: default; }
+
+    /* Colors */
+    .red { background-color: var(--red); } 
+    .blue { background-color: var(--blue); }
+    .yellow { background-color: var(--yellow); color: black; } 
+    .green { background-color: var(--green); }
+    .wild { background-color: var(--wild); color: white; }
+
+    /* Accessibility Symbols */
+    .card::after {
+        position: absolute; bottom: 5px; right: 8px;
+        font-size: 1.4rem; opacity: 0.7; font-weight: normal;
+    }
+    .red::after { content: "♥"; }
+    .blue::after { content: "◆"; }
+    .yellow::after { content: "●"; }
+    .green::after { content: "■"; }
+
+    .new-badge {
+        position: absolute; 
+        top: -18px; /* Move it slightly higher */
+        left: 50%;
+        transform: translateX(-50%); 
+        background: #2ecc71;
+        color: white; 
+        font-size: 0.7rem; 
+        padding: 2px 8px;
+        border-radius: 10px; 
+        z-index: 200; /* Higher than everything else */
+        font-weight: 900;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        border: 1.5px solid white;
+        pointer-events: none; /* So it doesn't block clicking the card */
+    }
+
+    #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; z-index: 10; }
+    #status-msg { position: absolute; bottom: 200px; width: 100%; text-align: center; font-weight: bold; }
+    .tooltip { position: absolute; top: 10px; right: 10px; background: #ffcc00; color: #000; padding: 10px; border-radius: 5px; z-index: 110; }
+    #color-picker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: 1fr 1fr; gap: 15px; z-index: 200; }
+    #color-picker button { width: 70px; height: 70px; border-radius: 50%; border: 3px solid white; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="first-turn-help" class="tooltip"><strong>Controls:</strong><br>• Double-click to play<br>• Click draw pile to draw<br>• Click card for info</div>
+
+    <div id="menu" class="overlay">
+        <h1>UNO</h1>
+        <div style="background: #222; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
+            <label>Stacking:</label>
+            <select id="set-stack">
+                <option value="OFF">OFF</option>
+                <option value="ON (SAME)" selected>ON (SAME)</option>
+                <option value="ON (ALL)">ON (ALL)</option>
+            </select>
+            <label>Draw Mode:</label>
+            <select id="set-draw">
+                <option value="once">Draw Once</option>
+                <option value="until">Draw Until Playable</option>
+            </select>
+            <label>0s & 7s Rules:</label>
+            <input type="checkbox" id="set-07" checked>
+            <label>Draw even if playable:</label>
+            <input type="checkbox" id="set-always-draw">
+        </div>
+        <button onclick="startMode('ai')">Singleplayer (vs AI)</button>
+        <button onclick="startMode('multi')">Multiplayer (PeerJS)</button>
+    </div>
+
+    <div id="lobby" class="overlay hidden">
+        <h2>Multiplayer Lobby</h2>
+        <p>Your ID: <strong id="my-id" style="letter-spacing: 2px; color: #ffaa00;">....</strong> 
+        <button onclick="copyId()" style="padding: 2px 8px; font-size: 0.7rem; height: auto;">Copy</button>
+        </p>
+        <input type="text" id="join-id" placeholder="Friend's ID" autocomplete="off" style="text-transform: uppercase; text-align: center; width: 120px;">
+        <button onclick="connectToPeer()">Connect</button>
+        <button onclick="location.reload()">Back</button>
+    </div>
+
+    <div id="win-screen" class="overlay hidden">
+        <h1 id="win-txt"></h1>
+        <div id="rematch-status"></div>
+        <button id="rematch-btn" onclick="requestRematch()">Play Again</button>
+        <button onclick="location.reload()">Main Menu</button>
+    </div>
+
+<div id="board" class="hidden">
+    <div id="hud">
+        <div id="turn-txt">Turn: -</div>
+        <div id="color-txt">Color: -</div>
+        <div id="stack-txt" style="color: #ff0; font-weight: bold;"></div>
+        <div id="card-info">Click a card for details</div>
+    </div>
+
+    <div id="opponent-hand" class="hand"></div>
+    
+    <div id="center-area">
+        <div id="draw-pile" class="card card-back" style="color:white; display:flex;" onclick="handleDrawRequest()">DRAW</div>
+        <div id="discard-pile"></div>
+    </div>
+
+    <div id="color-picker" class="hidden" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, 20px); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; z-index: 110;">
+        <button class="red" onclick="selectWildColor('red')" style="width:50px; height:50px; border-radius:50%; border:2px solid white;"></button>
+        <button class="blue" onclick="selectWildColor('blue')" style="width:50px; height:50px; border-radius:50%; border:2px solid white;"></button>
+        <button class="yellow" onclick="selectWildColor('yellow')" style="width:50px; height:50px; border-radius:50%; border:2px solid white;"></button>
+        <button class="green" onclick="selectWildColor('green')" style="width:50px; height:50px; border-radius:50%; border:2px solid white;"></button>
+    </div>
+
+    <div id="status-msg"></div>
+
+        <div style="display: flex; justify-content: center; gap: 10px; height: 40px; margin-bottom: 10px;">
+            <button id="skip-turn-btn" class="hidden" onclick="handleManualSkip()">Skip Turn</button>
+            <button id="uno-btn" class="hidden" style="background:#ffaa00; color:black; font-weight:bold" onclick="handleCallUno()">CALL UNO</button>
+            <button id="challenge-btn" class="hidden" style="background:#ff5555; font-weight:bold" onclick="handleChallengeRequest()">CHALLENGE!</button>
+        </div>
+        <div id="player-hand" class="hand"></div>
+    </div>
+</div>
+
+<script>
+const COLORS = ['red', 'blue', 'yellow', 'green'];
+const VALUES = ['0','1','2','3','4','5','6','7','8','9','Skip','Reverse','+2'];
+
+let state = {
+    deck: [], discard: [], 
+    players: [
+        {hand:[], uno:false, unoPending:false, ready:false}, 
+        {hand:[], uno:false, unoPending:false, ready:false}
+    ],
+    turn: 0, color: '', stack: 0, active: false, 
+    actionLock: false, hasDrawn: false,
+    settings: { stackMode: 'ON (SAME)', drawMode: 'once', rules07: true, drawAnytime: false },
+    isAI: false, isMulti: false, amIHost: false
+};
+
+let peer, conn;
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+
+function initGame() {
+    state.deck = [];
+    COLORS.forEach(c => VALUES.forEach(v => { state.deck.push({c, v}); if(v!=='0') state.deck.push({c,v}); }));
+    for(let i=0; i<4; i++) { state.deck.push({c:'wild', v:'Wild'}); state.deck.push({c:'wild', v:'+4'}); }
+    shuffle(state.deck);
+
+    // Deal 7 cards to each player
+    state.players.forEach(p => { p.hand = state.deck.splice(0, 7); p.uno = false; p.unoPending = false; p.ready = false; });
+    
+    // Find the first card in the remaining deck that is a simple number (0-9)
+    let startIdx = state.deck.findIndex(c => !isNaN(c.v) && c.c !== 'wild');
+    
+    // Fallback just in case, though with a full deck this will always find a number
+    if(startIdx === -1) startIdx = 0; 
+    
+    state.discard = [state.deck.splice(startIdx, 1)[0]];
+    state.color = state.discard[0].c;
+    state.turn = 0; state.stack = 0; state.active = true; state.actionLock = false; state.hasDrawn = false;
+    
+    document.getElementById('win-screen').classList.add('hidden');
+    document.getElementById('board').classList.remove('hidden');
+    render();
+    if(state.amIHost) {
+        setTimeout(sync, 500); 
+    }
+}
+
+function validateMove(card, top) {
+    if(state.stack > 0) {
+        if(state.settings.stackMode === 'OFF') return false;
+        const isD2 = card.v === '+2';
+        const isD4 = card.v === '+4';
+        if(!isD2 && !isD4) return false;
+        if(state.settings.stackMode === 'ON (SAME)') return card.v === top.v;
+        if(state.settings.stackMode === 'ON (ALL)') return true;
+        return false;
+    }
+    return (card.c === 'wild' || card.c === state.color || card.v === top.v);
+}
+
+function processPlay(pIdx, cIdx) {
+    if(state.actionLock || state.turn !== pIdx || !state.active) return;
+    const player = state.players[pIdx];
+    const card = player.hand[cIdx];
+    if(!card) return;
+    const top = state.discard[state.discard.length - 1];
+
+    if(!validateMove(card, top)) {
+        if(pIdx === 0 && !state.isMulti) showStatus("Invalid Move!");
+        return;
+    }
+
+    state.actionLock = true;
+    hideTooltip();
+
+    const willHaveOneCard = player.hand.length === 2;
+    const unoCalled = player.uno;
+
+    state.discard.push(player.hand.splice(cIdx, 1)[0]);
+    
+    if(!willHaveOneCard) player.uno = false;
+    if(willHaveOneCard && !unoCalled) player.unoPending = true;
+
+    if(state.settings.rules07) {
+        if(card.v === '0') {
+            let h0 = state.players[0].hand;
+            state.players[0].hand = state.players[1].hand;
+            state.players[1].hand = h0;
+            state.players.forEach(p => {p.uno = false; p.unoPending = false;});
+            showStatus("Hands Rotated!");
+        } else if (card.v === '7') {
+            let h0 = state.players[0].hand;
+            state.players[0].hand = state.players[1].hand;
+            state.players[1].hand = h0;
+            state.players.forEach(p => {p.uno = false; p.unoPending = false;});
+            showStatus("Hands Swapped!");
+        }
+    }
+
+    if(card.v === '+2') state.stack += 2;
+    if(card.v === '+4') state.stack += 4;
+
+    if(card.c === 'wild') {
+        state.color = 'wild'; 
+        if(state.isAI && pIdx === 1) {
+            aiPickColor();
+        } else {
+            render();
+            if(state.isMulti) sync();
+        }
+    } else {
+        state.color = card.c;
+        if(card.v === 'Skip' || card.v === 'Reverse') {
+            finishTurn(pIdx);
+        } else {
+            finishTurn(pIdx === 0 ? 1 : 0);
+        }
+    }
+}
+
+function finishTurn(nextPlayer) { 
+    state.players[state.turn].hand.forEach(c => delete c.isNew); 
+    
+    state.turn = nextPlayer;
+    state.hasDrawn = false; 
+    state.actionLock = false; 
+    render();
+    
+    if(state.isMulti && state.amIHost) sync(); 
+    if(state.active && state.turn === 1 && state.isAI) setTimeout(runAI, 800); 
+}
+
+function processDraw(pIdx) {
+    if(state.actionLock || state.turn !== pIdx || !state.active) return;
+    
+    const top = state.discard[state.discard.length - 1];
+    const canPlay = state.players[pIdx].hand.some(c => validateMove(c, top));
+
+    if(!state.settings.drawAnytime && canPlay && state.stack === 0) {
+        if(pIdx === 0) showStatus("You have playable cards!");
+        return;
+    }
+
+    state.actionLock = true;
+    
+    if(state.stack > 0) {
+        for(let i=0; i<state.stack; i++) drawCardToPlayer(pIdx);
+        state.stack = 0;
+        state.players[pIdx].uno = false;
+        state.players[pIdx].unoPending = false;
+        finishTurn(pIdx === 0 ? 1 : 0);
+    } else {
+        drawCardToPlayer(pIdx);
+        state.players[pIdx].uno = false;
+        state.players[pIdx].unoPending = false;
+        state.hasDrawn = true;
+        
+        const lastCard = state.players[pIdx].hand[state.players[pIdx].hand.length-1];
+        const isPlayable = validateMove(lastCard, top);
+
+        if(state.settings.drawMode === 'once' || isPlayable) {
+            state.actionLock = false;
+            render();
+            if(state.isMulti) sync();
+        } else {
+            let safety = 0;
+            while(!validateMove(state.players[pIdx].hand[state.players[pIdx].hand.length-1], top) && safety < 100) {
+                if(!drawCardToPlayer(pIdx)) break;
+                safety++;
+            }
+            state.actionLock = false;
+            render();
+            if(state.isMulti) sync();
+        }
+    }
+}
+
+function drawCardToPlayer(pIdx) { if(state.deck.length === 0) { if(state.discard.length <= 1) return false; const top = state.discard.pop(); state.deck = shuffle([...state.discard]); state.discard = [top]; } if(state.deck.length > 0) { let c = state.deck.pop(); if(pIdx === 0) c.isNew = true; state.players[pIdx].hand.push(c); return true; } return false; }
+
+function handleDrawRequest() {
+    if(state.isMulti && !state.amIHost) conn.send({type: 'DRAW'});
+    else processDraw(0);
+}
+
+function handlePlayRequest(idx) {
+    if(state.isMulti && !state.amIHost) conn.send({type: 'PLAY', index: idx});
+    else processPlay(0, idx);
+}
+
+function handleManualSkip() { if(state.turn !== 0 || !state.hasDrawn || state.actionLock) return; if(state.isMulti && !state.amIHost) { conn.send({type: 'SKIP'}); } else { finishTurn(1); } }
+
+function handleCallUno() {
+    if(state.players[0].hand.length > 2) return;
+    if(state.isMulti && !state.amIHost) conn.send({type: 'UNO'});
+    else {
+        state.players[0].uno = true;
+        showStatus("UNO!");
+        render();
+        if(state.isMulti) sync();
+    }
+}
+
+function handleChallengeRequest() {
+    if(state.isMulti && !state.amIHost) conn.send({type: 'CHALLENGE'});
+    else {
+        if(state.players[1].unoPending && state.turn === 0) {
+            showStatus("Challenge Success!");
+            drawCardToPlayer(1); drawCardToPlayer(1);
+            state.players[1].unoPending = false;
+            state.players[1].uno = true;
+            render();
+            if(state.isMulti) sync();
+        }
+    }
+}
+
+function selectWildColor(c) {
+    if(state.isMulti && !state.amIHost) {
+        conn.send({type: 'COLOR', color: c});
+        document.getElementById('color-picker').classList.add('hidden');
+    } else {
+        state.color = c;
+        document.getElementById('color-picker').classList.add('hidden');
+        finishTurn(state.turn === 0 ? 1 : 0);
+    }
+}
+
+function render() {
+    if(!state.active) return;
+    const pHand = document.getElementById('player-hand');
+    pHand.innerHTML = '';
+    
+    state.players[0].hand.forEach((c, i) => {
+        const div = document.createElement('div');
+        // We use state.color for wild cards that have been played, 
+        // but for cards in hand, we use their own color (c.c)
+        div.className = `card ${c.c}`;
+        
+        let fontSize = "2.5rem"; 
+        if (c.v.length > 2) fontSize = "1.1rem";
+        if (c.v.includes('+')) fontSize = "2rem";
+        
+        div.innerHTML = `
+            ${c.isNew ? '<div class="new-badge" style="z-index: 100;">NEW</div>' : ''}
+            <span style="font-size: ${fontSize}; font-weight: 900; pointer-events: none; position: relative; z-index: 1;">${c.v}</span>
+        `;
+        
+        div.ondblclick = () => handlePlayRequest(i);
+        div.onclick = () => updateCardInfo(c);
+        pHand.appendChild(div);
+    });
+
+    const oHand = document.getElementById('opponent-hand');
+    oHand.innerHTML = '';
+    state.players[1].hand.forEach(() => {
+        const div = document.createElement('div');
+        div.className = 'card card-back';
+        oHand.appendChild(div);
+    });
+
+    // Discard Pile: Force it to use the ACTIVE state color for symbols
+    const disc = document.getElementById('discard-pile');
+    const top = state.discard[state.discard.length-1];
+    let discFS = (top.v.length > 2) ? "1.1rem" : (top.v.includes('+') ? "2rem" : "2.5rem");
+
+    disc.innerHTML = `
+        <div class="card ${state.color}">
+            <span style="font-size: ${discFS}; font-weight: 900;">${top.v}</span>
+        </div>
+    `;
+
+    document.getElementById('turn-txt').innerText = state.turn === 0 ? "Your Turn" : "Opponent's Turn";
+    document.getElementById('color-txt').innerText = "Color: " + state.color.toUpperCase();
+    document.getElementById('color-txt').style.color = `var(--${state.color})`;
+    document.getElementById('stack-txt').innerText = state.stack > 0 ? `+${state.stack} PENDING` : "";
+    
+    // Color Picker Visibility
+    if(state.color === 'wild' && state.turn === 0) {
+        document.getElementById('color-picker').classList.remove('hidden');
+    } else {
+        document.getElementById('color-picker').classList.add('hidden');
+    }
+
+    // Skip/Uno/Challenge Buttons
+    const canSkip = state.turn === 0 && state.hasDrawn;
+    const lastCard = state.players[0].hand[state.players[0].hand.length-1];
+    const isPlayable = lastCard ? validateMove(lastCard, top) : false;
+    
+    document.getElementById('skip-turn-btn').className = (canSkip && (state.settings.drawMode === 'once' || !isPlayable)) ? "" : "hidden";
+    document.getElementById('uno-btn').className = (state.players[0].hand.length <= 2 && !state.players[0].uno) ? "" : "hidden";
+    document.getElementById('challenge-btn').className = (state.players[1].unoPending && state.turn === 0) ? "" : "hidden";
+
+    checkWinCondition();
+}
+
+function updateCardInfo(c) {
+    document.getElementById('card-info').innerText = `Card: ${c.c} ${c.v}`;
+}
+
+function showStatus(m) {
+    const s = document.getElementById('status-msg');
+    s.innerText = m;
+    setTimeout(() => { if(s.innerText === m) s.innerText = ""; }, 2500);
+}
+
+function checkWinCondition() {
+    if(state.stack > 0) return;
+    if(state.players[0].hand.length === 0) endGame("You Win!");
+    else if(state.players[1].hand.length === 0) endGame("Opponent Wins!");
+}
+
+function endGame(txt) {
+    state.active = false;
+    document.getElementById('win-screen').classList.remove('hidden');
+    document.getElementById('win-txt').innerText = txt;
+}
+
+function requestRematch() {
+    if(state.isMulti) {
+        state.players[0].ready = true;
+        document.getElementById('rematch-status').innerText = "Waiting...";
+        conn.send({type: 'READY'});
+        if(state.players[1].ready && state.amIHost) initGame();
+    } else initGame();
+}
+
+function runAI() {
+    if(!state.active || state.turn !== 1) return;
+    if(state.players[0].unoPending) {
+        showStatus("AI Caught You!");
+        drawCardToPlayer(0); drawCardToPlayer(0);
+        state.players[0].unoPending = false;
+        state.players[0].uno = true;
+    }
+    const top = state.discard[state.discard.length-1];
+    const hand = state.players[1].hand;
+    let valid = hand.map((c, i) => validateMove(c, top) ? i : -1).filter(i => i !== -1);
+
+    if(valid.length > 0) {
+        if(hand.length === 2) { state.players[1].uno = true; showStatus("AI: UNO!"); }
+        processPlay(1, valid[0]);
+    } else processDraw(1);
+}
+
+function aiPickColor() {
+    const counts = {};
+    state.players[1].hand.forEach(c => { if(c.c !== 'wild') counts[c.c] = (counts[c.c] || 0) + 1; });
+    let best = COLORS[Math.floor(Math.random()*4)];
+    let max = -1;
+    for(let c in counts) { if(counts[c] > max) { max = counts[c]; best = c; } }
+    state.color = best;
+    finishTurn(0);
+}
+
+function startMode(m) {
+    state.settings.stackMode = document.getElementById('set-stack').value;
+    state.settings.drawMode = document.getElementById('set-draw').value;
+    state.settings.rules07 = document.getElementById('set-07').checked;
+    state.settings.drawAnytime = document.getElementById('set-always-draw').checked;
+    document.getElementById('menu').classList.add('hidden');
+    if(m === 'ai') {
+        state.isAI = true;
+        document.getElementById('board').classList.remove('hidden');
+        initGame();
+    } else {
+        state.isMulti = true;
+        document.getElementById('lobby').classList.remove('hidden');
+        const shortId = Math.random().toString(36).substring(2, 6).toUpperCase();
+        peer = new Peer(shortId); 
+        peer.on('open', id => {
+            document.getElementById('my-id').innerText = id;
+            document.getElementById('lobby').classList.remove('hidden');
+        });
+        peer.on('connection', c => { 
+            if(conn) return; 
+            conn = c; 
+            state.amIHost = true; 
+            setupConn(); 
+        });
+    }
+}
+
+function connectToPeer() {
+    const target = document.getElementById('join-id').value;
+    if(!target) return;
+    conn = peer.connect(target);
+    state.amIHost = false;
+    setupConn();
+}
+
+function setupConn() {
+    conn.on('open', () => { document.getElementById('lobby').classList.add('hidden'); document.getElementById('board').classList.remove('hidden'); if(state.amIHost) initGame(); });
+    conn.on('data', data => {
+        if(state.amIHost) {
+            if(data.type === 'PLAY') processPlay(1, data.index);
+            if(data.type === 'DRAW') processDraw(1);
+            if(data.type === 'SKIP') finishTurn(0);
+            if(data.type === 'COLOR') { state.color = data.color; finishTurn(0); }
+            if(data.type === 'UNO') { state.players[1].uno = true; sync(); }
+            if(data.type === 'CHALLENGE') { if(state.players[0].unoPending) { drawCardToPlayer(0); drawCardToPlayer(0); state.players[0].unoPending = false; state.players[0].uno = true; sync(); } }
+            if(data.type === 'READY') { state.players[1].ready = true; if(state.players[0].ready) initGame(); }
+        } else {
+            if(data.type === 'STATE') {
+                state.deck = data.state.deck; state.discard = data.state.discard; state.color = data.state.color; state.stack = data.state.stack; state.active = data.state.active;
+                state.players[0] = data.state.players[1]; // Guest is Player 1 in Host's eyes
+                state.players[1] = data.state.players[0]; // Host is Player 0 in Host's eyes
+                state.turn = (data.state.turn === 1) ? 0 : 1; // If it's P1's turn for Host, it's P0's turn for Guest
+                render();
+            }
+        }
+    });
+}
+
+function copyId() {
+    const id = document.getElementById('my-id').innerText;
+    navigator.clipboard.writeText(id);
+    showStatus("ID Copied to Clipboard!");
+}
+
+function sync() { if(conn && state.amIHost) conn.send({type: 'STATE', state}); }
+function hideTooltip() { document.getElementById('first-turn-help').style.display = 'none'; }
+</script>
+</body>
+</html>
