@@ -328,6 +328,106 @@ input:checked + .slider:before {
 .card-value:has-text-length(7) {
     font-size: 1.1rem;
 }
+
+#confetti-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 150;
+}
+
+#center-indicator {
+    position: absolute;
+    left: 50%;
+    /* Positioned between the discard pile and the player hand */
+    bottom: 250px; 
+    transform: translateX(-50%) rotate(0deg);
+    font-size: 2.5rem;
+    color: var(--accent);
+    text-shadow: 0 0 15px var(--accent);
+    transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* Optional: Add a pulse to the arrow so it feels "alive" */
+#center-indicator.active {
+    animation: arrow-glow 2s infinite ease-in-out;
+}
+
+@keyframes arrow-glow {
+    0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 5px var(--accent)); }
+    50% { opacity: 1; filter: drop-shadow(0 0 15px var(--accent)); }
+}
+
+/* Multiplayer Lobby Specifics */
+.lobby-card {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    padding: 40px;
+    border-radius: 4px; /* Sharp corporate corners */
+    backdrop-filter: blur(15px);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    width: 90%;
+    max-width: 500px;
+}
+
+.id-display {
+    background: #000;
+    border: 1px solid #333;
+    padding: 15px;
+    margin: 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.id-display strong {
+    font-family: monospace;
+    font-size: 1.5rem;
+    color: var(--accent);
+    letter-spacing: 4px;
+}
+
+.lobby-input-group {
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.lobby-input-group input {
+    height: 50px;
+    font-size: 1.2rem;
+    text-transform: uppercase;
+    text-align: center;
+    border: 1px solid #444;
+}
+
+.lobby-status-indicator {
+    margin-top: 20px;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #666;
+}
+
+.pulse-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    margin-right: 10px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.2); }
+    100% { opacity: 1; transform: scale(1); }
+}
 </style>
 </head>
 <body>
@@ -384,13 +484,30 @@ input:checked + .slider:before {
     <div id="action-overlay"></div>
 
     <div id="lobby" class="overlay hidden">
-        <h2>Multiplayer Lobby</h2>
-        <p>Your ID: <strong id="my-id" style="letter-spacing: 2px; color: #ffaa00;">....</strong> 
-        <button onclick="copyId()" style="padding: 2px 8px; font-size: 0.7rem; height: auto;">Copy</button>
-        </p>
-        <input type="text" id="join-id" placeholder="Friend's ID" autocomplete="off" style="text-transform: uppercase; text-align: center; width: 120px;">
-        <button onclick="connectToPeer()">Connect</button>
-        <button onclick="location.reload()">Back</button>
+        <div class="lobby-card">
+            <h2 style="margin-top:0; letter-spacing: 5px; text-transform: uppercase;">Multiplayer</h2>
+            
+            <p style="color: #888; font-size: 0.9rem;">Share your ID with a friend or enter theirs to begin.</p>
+
+            <div class="id-display">
+                <div style="display: flex; flex-direction: column; align-items: flex-start;">
+                    <span style="font-size: 0.6rem; color: #666; text-transform: uppercase;">Your Connection ID</span>
+                    <strong id="my-id">----</strong>
+                </div>
+                <button class="menu-btn" style="width: auto; height: 35px; padding: 0 15px; margin: 0;" onclick="copyId()">Copy</button>
+            </div>
+
+            <div class="lobby-input-group">
+                <input type="text" id="join-id" placeholder="ENTER FRIEND'S ID" maxlength="4">
+                <button class="menu-btn" style="width: 100%; margin: 0;" onclick="connectToPeer()">Join</button>
+            </div>
+
+            <div class="lobby-status-indicator">
+                <span class="pulse-dot"></span> Waiting for Connection
+            </div>
+
+            <button class="menu-btn secondary" style="width: 100%; margin-top: 20px;" onclick="location.reload()">Return to Menu</button>
+        </div>
     </div>
 
     <div id="win-screen" class="overlay hidden">
@@ -414,6 +531,8 @@ input:checked + .slider:before {
     </div>
 
     <div id="opponent-hand" class="hand"></div>
+
+    <div id="center-indicator" class="turn-indicator">▲</div>
     
     <div id="center-area">
         <div id="draw-pile" class="card card-back" onclick="handleDrawRequest()">DRAW</div>
@@ -879,6 +998,14 @@ state.players[0].hand.forEach((c, i) => {
     const showChallenge = state.turn === 0 && state.players[1].unoPending;
     document.getElementById('challenge-btn').classList.toggle('hidden', !showChallenge);
 
+    const indicator = document.getElementById('center-indicator');
+        if (state.turn === 0) {
+            indicator.style.transform = 'translateX(-50%) rotate(0deg)';
+        } else {
+            indicator.style.transform = 'translateX(-50%) rotate(180deg)';
+        }
+        
+        indicator.classList.add('active');
     checkWinCondition();
 }
 
@@ -933,6 +1060,52 @@ function endGame(txt) {
     state.active = false;
     document.getElementById('win-screen').classList.remove('hidden');
     document.getElementById('win-txt').innerText = txt;
+    if (txt.toLowerCase().includes("you win")) {
+        startConfetti();
+    }
+}
+
+function startConfetti() {
+    const canvas = document.createElement('canvas');
+    canvas.id = 'confetti-canvas';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let particles = [];
+    const colors = ['#ff5555', '#5555ff', '#ffaa00', '#55aa55', '#ffffff'];
+
+    for (let i = 0; i < 150; i++) {
+        particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height - canvas.height,
+            r: Math.random() * 6 + 4,
+            d: Math.random() * 10,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            tilt: Math.random() * 10 - 10
+        });
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles.forEach((p, i) => {
+            ctx.beginPath();
+            ctx.lineWidth = p.r;
+            ctx.strokeStyle = p.color;
+            ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+            ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+            ctx.stroke();
+            
+            p.y += Math.cos(p.d) + 1 + p.r / 2;
+            p.tilt = Math.sin(p.d) * 15;
+            if (p.y > canvas.height) {
+                particles[i] = { ...p, y: -20, x: Math.random() * canvas.width };
+            }
+        });
+        if (state.active === false) requestAnimationFrame(draw);
+    }
+    draw();
 }
 
 // Rematch Handling
@@ -1117,6 +1290,31 @@ function setupConn() {
             }
             if(data.type === 'STATUS') showStatus(data.msg);
         }
+        // Heartbeat Logic
+    let heartbeatInterval = setInterval(() => {
+        if (conn && conn.open) {
+            conn.send({ type: 'HEARTBEAT', timestamp: Date.now() });
+        } else {
+            clearInterval(heartbeatInterval);
+        }
+    }, 5000); // Send every 5 seconds
+
+    conn.on('data', data => {
+        if (data.type === 'HEARTBEAT') return; // Silently consume heartbeat
+
+        if (state.amIHost) {
+            // ... your existing host logic ...
+        } else {
+            // ... your existing guest logic ...
+        }
+    });
+
+    conn.on('close', () => {
+        showStatus("CONNECTION LOST! Please reload.");
+        state.active = false;
+        clearInterval(heartbeatInterval);
+    });
+
     });
 }
 
