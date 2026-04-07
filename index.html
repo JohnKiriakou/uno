@@ -336,30 +336,6 @@ input:checked + .slider:before {
     z-index: 150;
 }
 
-#center-indicator {
-    position: absolute;
-    left: 50%;
-    /* Positioned between the discard pile and the player hand */
-    bottom: 250px; 
-    transform: translateX(-50%) rotate(0deg);
-    font-size: 2.5rem;
-    color: var(--accent);
-    text-shadow: 0 0 15px var(--accent);
-    transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    z-index: 5;
-    pointer-events: none;
-}
-
-/* Optional: Add a pulse to the arrow so it feels "alive" */
-#center-indicator.active {
-    animation: arrow-glow 2s infinite ease-in-out;
-}
-
-@keyframes arrow-glow {
-    0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 5px var(--accent)); }
-    50% { opacity: 1; filter: drop-shadow(0 0 15px var(--accent)); }
-}
-
 /* Multiplayer Lobby Specifics */
 .lobby-card {
     background: var(--glass);
@@ -531,8 +507,6 @@ input:checked + .slider:before {
     </div>
 
     <div id="opponent-hand" class="hand"></div>
-
-    <div id="center-indicator" class="turn-indicator">▲</div>
     
     <div id="center-area">
         <div id="draw-pile" class="card card-back" onclick="handleDrawRequest()">DRAW</div>
@@ -997,15 +971,7 @@ state.players[0].hand.forEach((c, i) => {
 
     const showChallenge = state.turn === 0 && state.players[1].unoPending;
     document.getElementById('challenge-btn').classList.toggle('hidden', !showChallenge);
-
-    const indicator = document.getElementById('center-indicator');
-        if (state.turn === 0) {
-            indicator.style.transform = 'translateX(-50%) rotate(0deg)';
-        } else {
-            indicator.style.transform = 'translateX(-50%) rotate(180deg)';
-        }
         
-        indicator.classList.add('active');
     checkWinCondition();
 }
 
@@ -1234,7 +1200,11 @@ function setupConn() {
     });
     
     conn.on('data', data => {
+        // Silently consume heartbeat to keep the connection alive
+        if (data.type === 'HEARTBEAT') return;
+
         if(state.amIHost) {
+            // HOST LOGIC: Process actions sent by the Guest
             if(data.type === 'PLAY') processPlay(1, data.index);
             if(data.type === 'DRAW') processDraw(1);
             if(data.type === 'SKIP') finishTurn(0);
@@ -1242,8 +1212,8 @@ function setupConn() {
             if(data.type === 'UNO') { 
                 state.players[1].uno = true; 
                 state.players[1].unoPending = false;
-                showStatus("PLAYER 2: UNO!");
-                sync("UNO!"); // Sync the Uno shout
+                showStatus("OPPONENT CALLED UNO!");
+                sync("UNO!"); 
                 render();
             }
             if(data.type === 'CHALLENGE') { 
@@ -1261,6 +1231,7 @@ function setupConn() {
                 if(state.players[0].ready) initGame(); 
             }
         } else {
+            // GUEST LOGIC: Receive and display the state sent by the Host
             if(data.type === 'STATE') {
                 const receivedState = data.state;
                 state.deck = receivedState.deck;
@@ -1270,8 +1241,11 @@ function setupConn() {
                 state.active = receivedState.active;
                 state.settings = receivedState.settings;
                 
+                // Swap players so Guest sees themselves as "Player 0" (bottom of screen)
                 state.players[0] = receivedState.players[1]; 
                 state.players[1] = receivedState.players[0];
+                
+                // Align the turn indicator for Guest perspective
                 state.turn = (receivedState.turn === 1) ? 0 : 1;
                 state.hasDrawn = (state.turn === 0) ? receivedState.hasDrawn : false;
 
@@ -1281,42 +1255,34 @@ function setupConn() {
                     document.getElementById('rematch-status').innerText = "";
                 }
 
-                // TRIGGER THE FLASH ON GUEST SCREEN
-                if(data.action) {
-                    flashAction(data.action);
-                }
-                
+                if(data.action) flashAction(data.action);
                 render();
             }
             if(data.type === 'STATUS') showStatus(data.msg);
         }
-        // Heartbeat Logic
+    });
+
+    // Keep connection from timing out
     let heartbeatInterval = setInterval(() => {
         if (conn && conn.open) {
             conn.send({ type: 'HEARTBEAT', timestamp: Date.now() });
         } else {
             clearInterval(heartbeatInterval);
         }
-    }, 5000); // Send every 5 seconds
-
-    conn.on('data', data => {
-        if (data.type === 'HEARTBEAT') return; // Silently consume heartbeat
-
-        if (state.amIHost) {
-            // ... your existing host logic ...
-        } else {
-            // ... your existing guest logic ...
-        }
-    });
+    }, 5000);
 
     conn.on('close', () => {
         showStatus("CONNECTION LOST! Please reload.");
         state.active = false;
         clearInterval(heartbeatInterval);
     });
-
-    });
 }
+
+    conn.on('close', () => {
+        showStatus("CONNECTION LOST! Please reload.");
+        state.active = false;
+        clearInterval(heartbeatInterval);
+    });
 
 function copyId() {
     const id = document.getElementById('my-id').innerText;
