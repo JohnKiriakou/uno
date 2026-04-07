@@ -19,20 +19,36 @@
     .hand { display: flex; justify-content: center; height: 160px; gap: -30px; padding: 10px; min-height: 160px; }
     #center-area { flex-grow: 1; display: flex; align-items: center; justify-content: center; gap: 50px; }
     #card-info {margin-top: 10px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.2); font-size: 0.9rem; line-height: 1.2; }
-    
-    /* Card Appearance */
-    .card { 
-        width: var(--card-w); height: var(--card-h); border-radius: 10px; 
-        border: 3px solid white; position: relative; cursor: pointer; 
-        display: flex; align-items: center; justify-content: center; 
-        transition: transform 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.3); 
-        user-select: none; overflow: visible; /* Crucial for the badge */
-        overflow: visible !important;
-        overflow: visible !important;
-        position: relative;
-    }
+
+.card {
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    user-select: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    border: 4px solid white;
+    container-type: inline-size; /* This is the secret fix */
+}
+
+/* This makes the text scale PERFECTLY to the card width */
+.card span {
+    font-size: 40cqw; 
+    font-weight: 900;
+    pointer-events: none;
+}
+
+/* This shrinks the text automatically for long words like "Skip" */
+.card span.small-text {
+    font-size: 20cqw;
+}
     .card:hover { transform: translateY(-20px); z-index: 50; }
-    .card-back { background: #333; color: transparent; border-color: #555; cursor: default; }
+    .card-back { background: #333; color: white; border-color: #555; cursor: default; }
 
     /* Card Color Classes */
     .red { background-color: var(--red); } 
@@ -68,7 +84,21 @@
 
     #hud { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.6); padding: 15px; border-radius: 8px; z-index: 10; }
     #status-msg { position: absolute; bottom: 200px; width: 100%; text-align: center; font-weight: bold; }
-    .tooltip { position: absolute; top: 10px; right: 10px; background: #ffcc00; color: #000; padding: 10px; border-radius: 5px; z-index: 110; }
+.tooltip { 
+    position: absolute; 
+    top: 10px; 
+    right: 10px; 
+    background: #b6b6b6; 
+    color: #000; 
+    padding: 15px 25px 10px 10px; /* Added right padding for the X */
+    border-radius: 2px; /* Kept sharp for your corporate style */
+    z-index: 110; 
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.tooltip span:hover {
+    opacity: 1 !important;
+}
     #color-picker { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: 1fr 1fr; gap: 15px; z-index: 200; }
     #color-picker button { width: 70px; height: 70px; border-radius: 50%; border: 3px solid white; }
     .hidden { display: none !important; visibility: hidden; pointer-events: none; }
@@ -115,34 +145,240 @@
     border-color: #ffaa00 !important;
     box-shadow: 0 15px 30px rgba(0,0,0,0.6);
 }
+/* Modern Root & Typography */
+:root {
+    --accent: #ffaa00;
+    --glass: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+}
+
+#menu {
+    background: radial-gradient(circle at center, #1e1e1e 0%, #0a0a0a 100%);
+    backdrop-filter: blur(10px);
+}
+
+#menu h1 {
+    font-size: 4rem;
+    letter-spacing: 10px;
+    margin-bottom: 30px;
+    background: linear-gradient(to bottom, #fff 0%, #888 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 5px 15px rgba(0,0,0,0.5));
+}
+
+/* Glassmorphism Settings Box */
+.settings-panel {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    padding: 30px;
+    border-radius: 16px;
+    margin-bottom: 30px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.settings-panel label {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #aaa;
+}
+
+/* Modern Select & Inputs */
+select, input[type="checkbox"] {
+    background: #222;
+    color: white;
+    border: 1px solid #444;
+    padding: 8px;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+}
+
+select:focus {
+    border-color: var(--accent);
+}
+
+/* Redesigned Buttons */
+.menu-btn {
+    width: 280px;
+    height: 50px;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 2px;
+    background: white;
+    color: black;
+    border-radius: 2px; /* Sharper, "corporate" corners */
+    margin: 10px;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.menu-btn:hover {
+    background: var(--accent);
+    color: black;
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(255, 170, 0, 0.3);
+}
+
+.menu-btn.secondary {
+    background: transparent;
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+.menu-btn.secondary:hover {
+    border-color: white;
+    background: rgba(255,255,255,0.1);
+}
+/* Container for the toggle */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+}
+
+/* Hide default checkbox */
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+/* The slider track */
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #333;
+    transition: .3s;
+    border: 1px solid #444;
+}
+
+/* The sliding knob */
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 12px;
+    width: 12px;
+    left: 4px;
+    bottom: 3px;
+    background-color: #888;
+    transition: .3s;
+}
+
+/* Active state colors */
+input:checked + .slider {
+    background-color: rgba(255, 170, 0, 0.2);
+    border-color: var(--accent);
+}
+
+input:checked + .slider:before {
+    transform: translateX(18px);
+    background-color: var(--accent);
+}
+
+/* Sharp corners for that corporate look */
+.slider { border-radius: 2px; }
+.slider:before { border-radius: 1px; }
+
+.menu-logo {
+    width: auto;
+    height: 120px; /* Adjust this to fit your menu size */
+    margin-bottom: 30px;
+    filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); /* Adds depth to the PNG */
+    user-select: none;
+    pointer-events: none;
+}
+/* Visual feedback when a card is being dragged */
+.card.dragging {
+    opacity: 0.5;
+    transform: scale(0.8);
+    cursor: grabbing;
+}
+
+#discard-pile.drag-over {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    transform: scale(1.05);
+}
+.card-value {
+    font-size: 2.2rem;
+    font-weight: 900;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+}
+
+/* Automatically shrink text for longer words like "Skip" or "Reverse" */
+.card-value:has-text-length(3), 
+.card-value:has-text-length(4),
+.card-value:has-text-length(5),
+.card-value:has-text-length(6),
+.card-value:has-text-length(7) {
+    font-size: 1.1rem;
+}
 </style>
 </head>
 <body>
 
 <div id="game-container">
-    <div id="first-turn-help" class="tooltip"><strong>Controls:</strong><br>• Double-click to play<br>• Click draw pile to draw<br>• Click card for info</div>
+<div id="first-turn-help" class="tooltip">
+    <span onclick="hideTooltip()" style="position: absolute; top: 5px; right: 8px; cursor: pointer; font-size: 1.2rem; line-height: 1; opacity: 0.5;">×</span>
+    
+    <strong>Controls:</strong><br>
+    • Double-click to play a card<br>
+    • Click draw pile to draw<br>
+    • Click cards for info
+</div>
 
-    <div id="menu" class="overlay">
-        <h1>UNO</h1>
-        <div style="background: #222; padding: 20px; border-radius: 10px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left;">
-            <label>Stacking:</label>
+<div id="menu" class="overlay">
+    <img src="logo.png" alt="UNO Logo" class="menu-logo">
+    
+    <div class="settings-panel">
+            <label>Stacking Rules</label>
             <select id="set-stack">
-                <option value="OFF">OFF</option>
-                <option value="ON (SAME)" selected>ON (SAME)</option>
-                <option value="ON (ALL)">ON (ALL)</option>
+                <option value="OFF">Disabled</option>
+                <option value="ON (SAME)" selected>Same Card Only</option>
+                <option value="ON (ALL)">Stack All</option>
             </select>
-            <label>Draw Mode:</label>
+            
+            <label>Draw Mode</label>
             <select id="set-draw">
-                <option value="once">Draw Once</option>
+                <option value="once">Draw One</option>
                 <option value="until">Draw Until Playable</option>
             </select>
-            <label>0s & 7s Rules:</label>
-            <input type="checkbox" id="set-07">
-            <label>Draw even if playable:</label>
-            <input type="checkbox" id="set-always-draw">
+            
+            <label>Rotate & Swap (0/7)</label>
+            <label class="switch">
+                <input type="checkbox" id="set-07">
+                <span class="slider"></span>
+            </label>
+            
+            <label>Strategic Drawing</label>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <label class="switch">
+                    <input type="checkbox" id="set-always-draw">
+                    <span class="slider"></span>
+                </label>
+            </div>
         </div>
-        <button onclick="startMode('ai')">Singleplayer (vs AI)</button>
-        <button onclick="startMode('multi')">Multiplayer</button>
+
+        <div class="menu-actions">
+            <button class="menu-btn" onclick="startMode('ai')">Singleplayer</button>
+            <br>
+            <button class="menu-btn secondary" onclick="startMode('multi')">Multiplayer</button>
+        </div>
     </div>
 
     <div id="action-overlay"></div>
@@ -180,8 +416,12 @@
     <div id="opponent-hand" class="hand"></div>
     
     <div id="center-area">
-        <div id="draw-pile" class="card card-back" style="color:white; display:flex;" onclick="handleDrawRequest()">DRAW</div>
-        <div id="discard-pile"></div>
+        <div id="draw-pile" class="card card-back" onclick="handleDrawRequest()">DRAW</div>
+        <div id="discard-pile" 
+            ondragover="event.preventDefault(); this.classList.add('drag-over');" 
+            ondragleave="this.classList.remove('drag-over');" 
+            ondrop="handleDrop(event)">
+        </div>
     </div>
 
     <div id="color-picker" class="hidden" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, 20px); display: grid; grid-template-columns: 1fr 1fr; gap: 10px; z-index: 110;">
@@ -201,7 +441,7 @@
         <div id="player-hand" class="hand"></div>
     </div>
 </div>
-
+</div>
 <!-- JavaScript Code -->
 <script>
 // Game Constants
@@ -352,6 +592,8 @@ function processPlay(pIdx, cIdx) {
         }
     }
 
+    state.color = card.c;
+
     if(card.v === 'Skip' || card.v === 'Reverse') {
             flashText = card.v.toUpperCase() + "!";
             flashAction(flashText);
@@ -378,7 +620,6 @@ function processPlay(pIdx, cIdx) {
             if(state.isAI && pIdx === 1) aiPickColor();
             else render();
         } else {
-            state.color = card.c;
             if(flashText) {
                 flashAction(flashText);
                 sync(flashText);
@@ -553,34 +794,55 @@ function render() {
     const top = state.discard[state.discard.length-1];
     pHand.innerHTML = '';
     
-    state.players[0].hand.forEach((c, i) => {
-        const div = document.createElement('div');
-        const isSelected = state.selectedIdx === i;
-        const isPlayable = validateMove(c, top) && state.turn === 0;
+state.players[0].hand.forEach((c, i) => {
+    const div = document.createElement('div');
+    const isSelected = state.selectedIdx === i;
+    const isPlayable = validateMove(c, top) && state.turn === 0;
 
-        div.className = `card ${c.c} ${isSelected ? 'selected' : ''} ${(!isPlayable && state.turn === 0) ? 'unplayable' : ''}`;
+    div.className = `card ${c.c} ${isSelected ? 'selected' : ''} ${(!isPlayable && state.turn === 0) ? 'unplayable' : ''}`;
+    div.draggable = isPlayable; // Only allow dragging if the move is legal
+    
+    const isLong = c.v.length > 2;
+    div.innerHTML = `${c.isNew ? '<div class="new-badge">NEW</div>' : ''}<span class="${isLong ? 'small-text' : ''}">${c.v}</span>`;
+
+    // Drag Logic
+    div.ondragstart = (e) => {
+        e.dataTransfer.setData('text/plain', i); // Store the card index
+        div.classList.add('dragging');
+    };
+
+    div.ondragend = () => div.classList.remove('dragging');
         
-        let fontSize = c.v.length > 2 ? "1.1rem" : (c.v.includes('+') ? "2rem" : "2.5rem");
-        div.innerHTML = `${c.isNew ? '<div class="new-badge">NEW</div>' : ''}<span style="font-size: ${fontSize}; font-weight: 900;">${c.v}</span>`;
-        
-        div.onclick = () => {
-            // If the card is ALREADY selected, clicking it again plays it
-            if (state.selectedIdx === i) {
-                state.selectedIdx = -1; 
-                handlePlayRequest(i);
-            } else {
-                // Otherwise, just select it
-                state.selectedIdx = i;
-                updateCardInfo(c);
-                render(); 
-            }
-        };
+    div.onclick = (e) => {
+                // Stop propagation to prevent any container-level clicks from firing
+                e.stopPropagation();
+
+                if (state.selectedIdx === i) {
+                    // SECOND CLICK: If the card is already selected, try to play it
+                    if (isPlayable) {
+                        state.selectedIdx = -1;
+                        handlePlayRequest(i);
+                    } else {
+                        // If it's up but not playable, clicking it again puts it back down
+                        state.selectedIdx = -1;
+                        document.getElementById('card-info').innerHTML = "Click a card for details";
+                    }
+                } else {
+                    // FIRST CLICK: Immediately select and show info
+                    state.selectedIdx = i;
+                    updateCardInfo(c);
+                }
+                
+                // Re-render immediately for instant visual feedback
+                render();
+            };
 
         pHand.appendChild(div);
     });
 
     const hasMove = state.players[0].hand.some(c => validateMove(c, top));
     const drawBtn = document.getElementById('draw-pile');
+    drawBtn.innerText = "DRAW";
     drawBtn.classList.toggle('pulse-draw', !hasMove && state.turn === 0);
 
     const oHand = document.getElementById('opponent-hand');
@@ -592,8 +854,8 @@ function render() {
     });
 
     const disc = document.getElementById('discard-pile');
-    let discFS = (top.v.length > 2) ? "1.1rem" : (top.v.includes('+') ? "2rem" : "2.5rem");
-    disc.innerHTML = `<div class="card ${state.color}"><span style="font-size: ${discFS}; font-weight: 900;">${top.v}</span></div>`;
+    const topIsLong = top.v.length > 2;
+    disc.innerHTML = `<div class="card ${state.color}"><span class="${topIsLong ? 'small-text' : ''}">${top.v}</span></div>`;
 
     document.getElementById('turn-txt').innerText = state.turn === 0 ? "Your Turn" : "Opponent's Turn";
     document.getElementById('color-txt').innerText = "Color: " + state.color.toUpperCase();
@@ -639,6 +901,19 @@ function updateCardInfo(c) {
     `;
 }
 
+function handleDrop(e) {
+    e.preventDefault();
+    const centerArea = document.getElementById('center-area');
+    centerArea.classList.remove('drag-over');
+
+    const cardIdx = parseInt(e.dataTransfer.getData('text/plain'));
+    
+    if (!isNaN(cardIdx)) {
+        // If the move is valid, play it
+        handlePlayRequest(cardIdx);
+    }
+}
+
 // Status Messages
 function showStatus(m) {
     const s = document.getElementById('status-msg');
@@ -673,18 +948,33 @@ function requestRematch() {
 // AI Logic
 function runAI() {
     if(!state.active || state.turn !== 1) return;
-    if(state.players[0].unoPending) {
-        showStatus("AI Caught You!");
-        drawCardToPlayer(0); drawCardToPlayer(0);
-        state.players[0].unoPending = false;
-        state.players[0].uno = true;
+    if (state.players[0].unoPending) {
+        if (Math.random() > 0.5) {
+            showStatus("AI Caught You!");
+            drawCardToPlayer(0); 
+            drawCardToPlayer(0);
+            state.players[0].unoPending = false;
+            state.players[0].uno = true;
+        } else {
+            console.log("AI failed to notice your UNO!"); 
+        }
     }
-    const top = state.discard[state.discard.length-1];
+        const top = state.discard[state.discard.length-1];
     const hand = state.players[1].hand;
     let valid = hand.map((c, i) => validateMove(c, top) ? i : -1).filter(i => i !== -1);
 
     if(valid.length > 0) {
-        if(hand.length === 2) { state.players[1].uno = true; showStatus("AI: UNO!"); }
+    // Locate this inside the valid.length > 0 block
+    if (hand.length === 2) { 
+        if (Math.random() > 0.5) { // 50% chance to remember to shout
+            state.players[1].uno = true; 
+            showStatus("AI: UNO!"); 
+        } else {
+            // AI forgot! It is now vulnerable to a challenge.
+            state.players[1].unoPending = true; 
+            state.players[1].uno = false;
+        }
+    }
         processPlay(1, valid[0]);
     } else {
         processDraw(1);
@@ -844,7 +1134,9 @@ function sync(actionText = null) {
 }
 
 // Tooltip Hiding
-function hideTooltip() { document.getElementById('first-turn-help').style.display = 'none'; }
+function hideTooltip() { 
+    document.getElementById('first-turn-help').style.display = 'none'; 
+}
 </script>
 </body>
 </html>
