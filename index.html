@@ -108,6 +108,13 @@
     text-transform: uppercase;
     text-shadow: 0 0 20px rgba(0,0,0,0.8); /* Added shadow for better legibility */
 }
+
+.card.selected {
+    transform: translateY(-40px) scale(1.1) !important;
+    z-index: 100;
+    border-color: #ffaa00 !important;
+    box-shadow: 0 15px 30px rgba(0,0,0,0.6);
+}
 </style>
 </head>
 <body>
@@ -166,6 +173,10 @@
         <div id="card-info">Click a card for details</div>
     </div>
 
+    <div id="game-stats" style="text-align: center; color: #aaa; font-weight: bold; margin-bottom: 10px; font-family: monospace;">
+        OPPONENT: <span id="opp-card-count">0</span> | DECK: <span id="deck-count">0</span>
+    </div>
+
     <div id="opponent-hand" class="hand"></div>
     
     <div id="center-area">
@@ -206,6 +217,18 @@ const CARD_DESCRIPTIONS = {
     '7': '7s & 0s Rule: Choose any player to swap your entire hand with. Otherwise just a regular card.'
 };
 
+const sfx = {
+    play: new Audio('card-play.mp3'),
+    draw: new Audio('card-draw.mp3'),
+    turn: new Audio('your-turn.mp3'),
+    uno:  new Audio('uno-shout.mp3')
+};
+
+function playSound(audio) {
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+}
+
 // Game State
 let state = {
     deck: [], discard: [], 
@@ -216,7 +239,8 @@ let state = {
     turn: 0, color: '', stack: 0, active: false, 
     actionLock: false, hasDrawn: false,
     settings: { stackMode: 'ON (SAME)', drawMode: 'once', rules07: true, drawAnytime: false },
-    isAI: false, isMulti: false, amIHost: false
+    isAI: false, isMulti: false, amIHost: false,
+    selectedIdx: -1
 };
 
 let peer, conn;
@@ -294,6 +318,8 @@ function processPlay(pIdx, cIdx) {
         return;
     }
 
+    playSound(sfx.play);
+
     state.actionLock = true;
     hideTooltip();
     let flashText = null;
@@ -327,44 +353,46 @@ function processPlay(pIdx, cIdx) {
     }
 
     if(card.v === 'Skip' || card.v === 'Reverse') {
-        flashText = card.v.toUpperCase() + "!";
-        flashAction(flashText);
-        sync(flashText);
-        finishTurn(pIdx);
-    } else if (card.v === '+2') {
-        flashText = "+2";
-        state.stack += 2;
-        flashAction(flashText);
-        sync(flashText);
-        finishTurn(pIdx === 0 ? 1 : 0);
-    } else if (card.v === '+4') {
-        flashText = "+4";
-        state.stack += 4;
-        state.color = 'wild'; 
-        flashAction(flashText);
-        sync(flashText);
-        if(state.isAI && pIdx === 1) aiPickColor();
-        else render();
-    } else if (card.c === 'wild') {
-        state.color = 'wild'; 
-        flashAction("WILD!");
-        sync("WILD!");
-        if(state.isAI && pIdx === 1) aiPickColor();
-        else render();
-    } else {
-        state.color = card.c;
-        if(flashText) {
+            flashText = card.v.toUpperCase() + "!";
             flashAction(flashText);
             sync(flashText);
+            finishTurn(pIdx);
+        } else if (card.v === '+2') {
+            flashText = "+2";
+            state.stack += 2;
+            flashAction(flashText);
+            sync(flashText);
+            finishTurn(pIdx === 0 ? 1 : 0);
+        } else if (card.v === '+4') {
+            flashText = "+4";
+            state.stack += 4;
+            state.color = 'wild'; 
+            flashAction(flashText);
+            sync(flashText);
+            if(state.isAI && pIdx === 1) aiPickColor();
+            else render();
+        } else if (card.c === 'wild') {
+            state.color = 'wild'; 
+            flashAction("WILD!");
+            sync("WILD!");
+            if(state.isAI && pIdx === 1) aiPickColor();
+            else render();
         } else {
-            sync();
+            state.color = card.c;
+            if(flashText) {
+                flashAction(flashText);
+                sync(flashText);
+            } else {
+                sync();
+            }
+            finishTurn(pIdx === 0 ? 1 : 0);
         }
-        finishTurn(pIdx === 0 ? 1 : 0);
     }
-}
-
 // Turn Management
 function finishTurn(nextPlayer) { 
+    if (nextPlayer === 0 && state.turn !== 0) {
+        playSound(sfx.turn);
+    }
     state.players[state.turn].hand.forEach(c => delete c.isNew); 
     
     state.turn = nextPlayer;
@@ -445,6 +473,7 @@ function drawCardToPlayer(pIdx) {
     } 
     if(state.deck.length > 0) { 
         let c = state.deck.pop(); 
+        playSound(sfx.draw);
         c.isNew = true; 
         state.players[pIdx].hand.push(c); 
         return true; 
@@ -467,6 +496,7 @@ function handleManualSkip() { if(state.turn !== 0 || !state.hasDrawn || state.ac
 
 function handleCallUno() {
     if(state.players[0].hand.length > 2) return;
+    playSound(sfx.uno);
     
     if(state.isMulti && !state.amIHost) {
         conn.send({type: 'UNO'});
@@ -513,6 +543,9 @@ function selectWildColor(c) {
 // UI Rendering
 function render() {
     if(!state.active) return;
+
+    document.getElementById('opp-card-count').innerText = state.players[1].hand.length;
+    document.getElementById('deck-count').innerText = state.deck.length;
     
     gameContainer.className = state.turn === 0 ? 'my-turn-active' : 'opp-turn-active';
 
@@ -522,14 +555,27 @@ function render() {
     
     state.players[0].hand.forEach((c, i) => {
         const div = document.createElement('div');
-        
+        const isSelected = state.selectedIdx === i;
         const isPlayable = validateMove(c, top) && state.turn === 0;
-        div.className = `card ${c.c} ${(!isPlayable && state.turn === 0) ? 'unplayable' : ''}`;
+
+        div.className = `card ${c.c} ${isSelected ? 'selected' : ''} ${(!isPlayable && state.turn === 0) ? 'unplayable' : ''}`;
         
         let fontSize = c.v.length > 2 ? "1.1rem" : (c.v.includes('+') ? "2rem" : "2.5rem");
         div.innerHTML = `${c.isNew ? '<div class="new-badge">NEW</div>' : ''}<span style="font-size: ${fontSize}; font-weight: 900;">${c.v}</span>`;
-        div.ondblclick = () => handlePlayRequest(i);
-        div.onclick = () => updateCardInfo(c);
+        
+        div.onclick = () => {
+            // If the card is ALREADY selected, clicking it again plays it
+            if (state.selectedIdx === i) {
+                state.selectedIdx = -1; 
+                handlePlayRequest(i);
+            } else {
+                // Otherwise, just select it
+                state.selectedIdx = i;
+                updateCardInfo(c);
+                render(); 
+            }
+        };
+
         pHand.appendChild(div);
     });
 
